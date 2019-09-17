@@ -5,6 +5,7 @@ import ntpath
 import time
 from . import util, html
 from subprocess import Popen, PIPE
+import cv2
 
 
 if sys.version_info[0] == 2:
@@ -36,12 +37,16 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
         im = util.tensor2im(im_data)
         image_name = '%s_%s.png' % (name, label)
         save_path = os.path.join(image_dir, image_name)
+        print(save_path)
         util.save_image(im, save_path, aspect_ratio=aspect_ratio)
         ims.append(image_name)
         txts.append(label)
         links.append(image_name)
     webpage.add_images(ims, txts, links, width=width)
 
+# def save_to_disk(visuals, image_path):
+#     label, im_data in visuals.items()
+#     return
 
 class Visualizer():
     """This class includes several functions that can display/save images and print/save logging information.
