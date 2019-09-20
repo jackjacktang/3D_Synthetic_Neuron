@@ -1,12 +1,13 @@
 import os.path
-from data.base_dataset import BaseDataset, get_params, get_transform
+from data.base_dataset import BaseDataset, get_params, get_params_3d, get_transform, get_transform_3d
 from data.image_folder import make_dataset
 from PIL import Image
 import random
+import numpy as np
 import cv2
 
 
-class NeuronDataset(BaseDataset):
+class Neuron3DDataset(BaseDataset):
     """A dataset class for paired image dataset.
 
     It assumes that the directory '/path/to/data/train' contains image pairs in the form of {A,B}.
@@ -22,12 +23,12 @@ class NeuronDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         self.dir_A = os.path.join(opt.dataroot, opt.phase+'A')  # get the image directory
         self.dir_B = os.path.join(opt.dataroot, opt.phase+'B')
-        self.A_paths = sorted(make_dataset(self.dir_A, opt.max_dataset_size))  # get image paths
-        self.B_paths = sorted(make_dataset(self.dir_B, opt.max_dataset_size))
-        # self.A_paths = make_dataset(self.dir_A, opt.max_dataset_size)
-        # self.B_paths = make_dataset(self.dir_B, opt.max_dataset_size)
-        # self.A_paths.sort(key=lambda x: int(x.rstrip("_gt_2d.tif").split("/")[-1]))
-        # self.B_paths.sort(key=lambda x: int(x.rstrip(".tif").split("/")[-1]))
+        # self.A_paths = sorted(make_dataset(self.dir_A, opt.max_dataset_size))  # get image paths
+        # self.B_paths = sorted(make_dataset(self.dir_B, opt.max_dataset_size))
+        self.A_paths = make_dataset(self.dir_A, opt.max_dataset_size)
+        self.B_paths = make_dataset(self.dir_B, opt.max_dataset_size)
+        self.A_paths.sort(key=lambda x: int(x.rstrip("_gt.tif").split("/")[-1]))
+        self.B_paths.sort(key=lambda x: int(x.rstrip(".tif").split("/")[-1]))
         assert(self.opt.load_size >= self.opt.crop_size)   # crop_size should be smaller than the size of loaded image
         self.input_nc = self.opt.output_nc if self.opt.direction == 'BtoA' else self.opt.input_nc
         self.output_nc = self.opt.input_nc if self.opt.direction == 'BtoA' else self.opt.output_nc
@@ -49,8 +50,10 @@ class NeuronDataset(BaseDataset):
         B_path = self.B_paths[index]
 
         # for 2d
-        A = Image.open(A_path).convert('RGB')
-        B = Image.open(B_path).convert('RGB')
+        # A = Image.open(A_path).convert('RGB')
+        # B = Image.open(B_path).convert('RGB')
+        A = self.loadtiff3d(A_path)
+        B = self.loadtiff3d(B_path)
 
         # AB_path = self.AB_paths[index]
         # AB = Image.open(AB_path).convert('RGB')
@@ -61,19 +64,28 @@ class NeuronDataset(BaseDataset):
         # B = AB.crop((w2, 0, w, h))
 
         # apply the same transform to both A and B
-        transform_params = get_params(self.opt, A.shape)
-        A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
-        B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
-
-        A = A_transform(A)
-        B = B_transform(B)
-        print(type(A))
-        print(A.shape)
-        print(B.shape)
+        # transform_params = get_params_3d(self.opt, A.shape)
+        # A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
+        # B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
+        A, B = get_transform_3d(self.opt.crop_size_3d, A, B)
+        # TODO: Add augumentation?
 
         return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
 
     def __len__(self):
         """Return the total number of images in the dataset."""
         return len(self.A_paths)
+
+    def loadtiff3d(self, filepath):
+        """Load a tiff file into 3D numpy array"""
+
+        import tifffile as tiff
+        a = tiff.imread(filepath)
+
+        stack = []
+        for sample in a:
+            stack.append(np.rot90(np.fliplr(np.flipud(sample))))
+        out = np.dstack(stack)
+
+        return out
 

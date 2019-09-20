@@ -14,7 +14,7 @@ else:
     VisdomExceptionBase = ConnectionError
 
 
-def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
+def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256, save_type='2d'):
     """Save images to the disk.
 
     Parameters:
@@ -35,18 +35,23 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
 
     for label, im_data in visuals.items():
         im = util.tensor2im(im_data)
-        image_name = '%s_%s.png' % (name, label)
-        save_path = os.path.join(image_dir, image_name)
-        print(save_path)
-        util.save_image(im, save_path, aspect_ratio=aspect_ratio)
-        ims.append(image_name)
-        txts.append(label)
-        links.append(image_name)
+        # print(im.shape)
+        if save_type == '3d':
+            image_name = '%s_%s.tif' % (name, label)
+            save_path = os.path.join(image_dir, image_name)
+            print(save_path)
+            print(im.shape)
+            util.save_image_3d(im, save_path)
+            return
+        else:
+            image_name = '%s_%s.png' % (name, label)
+            save_path = os.path.join(image_dir, image_name)
+            util.save_image(im, save_path, aspect_ratio=aspect_ratio)
+            ims.append(image_name)
+            txts.append(label)
+            links.append(image_name)
     webpage.add_images(ims, txts, links, width=width)
 
-# def save_to_disk(visuals, image_path):
-#     label, im_data in visuals.items()
-#     return
 
 class Visualizer():
     """This class includes several functions that can display/save images and print/save logging information.

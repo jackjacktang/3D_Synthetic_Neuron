@@ -56,9 +56,12 @@ class Pix2PixModel(BaseModel):
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                       not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
+        print(self.netG)
         if self.isTrain:  # define a discriminator; conditional GANs need to take both input and output images; Therefore, #channels for D is input_nc + output_nc
             self.netD = networks.define_D(opt.input_nc + opt.output_nc, opt.ndf, opt.netD,
                                           opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+
+            print(self.netD)
 
         if self.isTrain:
             # define loss functions
@@ -79,18 +82,25 @@ class Pix2PixModel(BaseModel):
         The option 'direction' can be used to swap images in domain A and domain B.
         """
         AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        temp_real_A = input['A' if AtoB else 'B']
+        temp_real_B = input['B' if AtoB else 'A']
+        temp_real_A = torch.unsqueeze(temp_real_A, 1).type(torch.FloatTensor)
+        temp_real_B = torch.unsqueeze(temp_real_B, 1).type(torch.FloatTensor)
+        self.real_A = temp_real_A.to(self.device)
+        self.real_B = temp_real_B.to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG(self.real_A)  # G(A)
+        # print('fakeB: ', self.fake_B.size())
 
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
         # Fake; stop backprop to the generator by detaching fake_B
-        fake_AB = torch.cat((self.real_A, self.fake_B), 1)  # we use conditional GANs; we need to feed both input and output to the discriminator
+        fake_AB = torch.cat((self.real_A, self.fake_B), 1)# we use conditional GANs; we need to feed both input and output to the discriminator
+        # print(self.real_A.size(), self.fake_B.size())
+        # print('fake AB', fake_AB.size())
         pred_fake = self.netD(fake_AB.detach())
         self.loss_D_fake = self.criterionGAN(pred_fake, False)
         # Real

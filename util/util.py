@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 import os
+import cv2
 
 
 def tensor2im(input_image, imtype=np.uint8):
@@ -19,9 +20,11 @@ def tensor2im(input_image, imtype=np.uint8):
         else:
             return input_image
         image_numpy = image_tensor[0].cpu().float().numpy()  # convert it into a numpy array
-        if image_numpy.shape[0] == 1:  # grayscale to RGB
-            image_numpy = np.tile(image_numpy, (3, 1, 1))
-        image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0  # post-processing: tranpose and scaling
+        # if image_numpy.shape[0] == 1:  # grayscale to RGB
+        #     image_numpy = np.tile(image_numpy, (3, 1, 1))
+        print(image_numpy.shape)
+        # image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0  # post-processing: tranpose and scaling
+        image_numpy = (np.transpose(image_numpy, (1, 2, 3, 0)) + 1) / 2.0 * 255.0
     else:  # if it is a numpy array, do nothing
         image_numpy = input_image
     return image_numpy.astype(imtype)
@@ -62,6 +65,24 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0):
     if aspect_ratio < 1.0:
         image_pil = image_pil.resize((int(h / aspect_ratio), w), Image.BICUBIC)
     image_pil.save(image_path)
+
+
+def writetiff3d(filepath, block):
+    import tifffile as tiff
+
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
+
+    with tiff.TiffWriter(filepath, bigtiff=False) as tif:
+        for z in range(block.shape[2]):
+            saved_block = np.rot90(block[:, :, z])
+            tif.save(saved_block.astype('uint8'), compress=0)
+
+
+def save_image_3d(image_numpy, image_path):
+    writetiff3d(image_path, image_numpy)
 
 
 def print_numpy(x, val=True, shp=False):

@@ -14,6 +14,300 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
+class conv3DBatchNorm(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        n_filters,
+        k_size,
+        stride,
+        padding,
+        bias=True,
+        dilation=1,
+        is_batchnorm=True,
+    ):
+        super(conv3DBatchNorm, self).__init__()
+
+        conv_mod = nn.Conv3d(
+            int(in_channels),
+            int(n_filters),
+            kernel_size=k_size,
+            padding=padding,
+            stride=stride,
+            bias=bias,
+            dilation=dilation,
+        )
+
+        if is_batchnorm:
+            self.cb_unit = nn.Sequential(conv_mod, nn.BatchNorm3d(int(n_filters)))
+        else:
+            self.cb_unit = nn.Sequential(conv_mod)
+
+    def forward(self, inputs):
+        outputs = self.cb_unit(inputs)
+        return outputs
+
+
+
+class conv3DBatchNormRelu(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        n_filters,
+        k_size,
+        stride,
+        padding,
+        bias=True,
+        dilation=1,
+        is_batchnorm=True,
+    ):
+        super(conv3DBatchNormRelu, self).__init__()
+
+        conv_mod = nn.Conv3d(
+            int(in_channels),
+            int(n_filters),
+            kernel_size=k_size,
+            padding=padding,
+            stride=stride,
+            bias=bias,
+            dilation=dilation,
+        )
+
+        if is_batchnorm:
+            self.cbr_unit = nn.Sequential(
+                conv_mod, nn.BatchNorm3d(int(n_filters)), nn.ReLU(inplace=True)
+            )
+        else:
+            self.cbr_unit = nn.Sequential(conv_mod, nn.ReLU(inplace=True))
+
+    def forward(self, inputs):
+        outputs = self.cbr_unit(inputs)
+        return outputs
+
+
+class deconv3DBatchNorm(nn.Module):
+    def __init__(self, in_channels, n_filters, k_size, stride, padding, output_padding=0, bias=True):
+        super(deconv3DBatchNorm, self).__init__()
+
+        self.dcb_unit = nn.Sequential(
+            nn.ConvTranspose3d(
+                int(in_channels),
+                int(n_filters),
+                kernel_size=k_size,
+                padding=padding,
+                output_padding=output_padding,
+                stride=stride,
+                bias=bias,
+            ),
+            nn.BatchNorm3d(int(n_filters)),
+        )
+
+    def forward(self, inputs):
+        outputs = self.dcb_unit(inputs)
+        return outputs
+
+
+class deconv3DBatchNormRelu(nn.Module):
+    def __init__(self, in_channels, n_filters, k_size, stride, padding, output_padding=0, bias=True):
+        super(deconv3DBatchNormRelu, self).__init__()
+
+        self.dcbr_unit = nn.Sequential(
+            nn.ConvTranspose3d(
+                int(in_channels),
+                int(n_filters),
+                kernel_size=k_size,
+                padding=padding,
+                output_padding=output_padding,
+                stride=stride,
+                bias=bias,
+            ),
+            nn.BatchNorm2d(int(n_filters)),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, inputs):
+        outputs = self.dcbr_unit(inputs)
+        return outputs
+
+
+class residualBlock3D(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_channels, n_filters, stride=1, downsample=None):
+        super(residualBlock3D, self).__init__()
+
+        self.convbnrelu1 = conv3DBatchNormRelu(in_channels, n_filters, 3, stride, 1, bias=False)
+        self.convbn2 = conv3DBatchNorm(n_filters, n_filters, 3, 1, 1, bias=False)
+        self.downsample = downsample
+        self.stride = stride
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = x
+        out = self.convbnrelu1(x)
+        out = self.convbn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+        return out
+
+
+class linknetUp(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, output_padding=0):
+        super(linknetUp, self).__init__()
+
+        # B, 2C, H, W -> B, C/2, H, W
+        self.convbnrelu1 = conv3DBatchNormRelu(
+            in_planes, in_planes/4, k_size=1, stride=1, padding=0
+        )
+
+        # B, C/2, H, W -> B, C/2, H, W
+        self.deconvbnrelu2 = deconv3DBatchNormRelu(
+            in_planes/4, in_planes/4, k_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding
+        )
+
+        # B, C/2, H, W -> B, C, H, W
+        self.convbnrelu3 = conv3DBatchNormRelu(
+            in_planes/4, out_planes, k_size=1, stride=1, padding=0
+        )
+
+    def forward(self, x):
+        # print(x.shape)
+        x = self.convbnrelu1(x)
+        # print(x.shape)
+        x = self.deconvbnrelu2(x)
+        # print(x.shape)
+        x = self.convbnrelu3(x)
+        # print(x.shape)
+        return x
+
+
+class unetConv2_3d(nn.Module):
+    def __init__(self, in_size, out_size, is_batchnorm):
+        super(unetConv2_3d, self).__init__()
+
+        if is_batchnorm:
+            self.conv1 = nn.Sequential(
+                nn.Conv3d(in_size, out_size, 3, 1, 1),
+                nn.BatchNorm3d(out_size),
+                nn.ReLU(),
+            )
+            self.conv2 = nn.Sequential(
+                nn.Conv3d(out_size, out_size, 3, 1, 1),
+                nn.BatchNorm3d(out_size),
+                nn.ReLU(),
+            )
+        else:
+            self.conv1 = nn.Sequential(nn.Conv3d(in_size, out_size, 3, 1, 1), nn.ReLU())
+            self.conv2 = nn.Sequential(
+                nn.Conv3d(out_size, out_size, 3, 1, 1), nn.ReLU()
+            )
+
+    def forward(self, inputs):
+        outputs = self.conv1(inputs)
+        outputs = self.conv2(outputs)
+        return outputs
+
+
+class unetUp3d(nn.Module):
+    def __init__(self, in_size, out_size, is_deconv):
+        super(unetUp3d, self).__init__()
+        self.conv = unetConv2_3d(in_size, out_size, False)
+        if is_deconv:
+            self.up = nn.ConvTranspose3d(in_size, out_size, kernel_size=2, stride=2)
+        else:
+            self.up = nn.functional.F.interpolate(scale_factor=2, mode='bilinear')
+
+    def forward(self, inputs1, inputs2):
+        outputs2 = self.up(inputs2)
+        offset1 = outputs2.size()[2] - inputs1.size()[2]
+        offset2 = outputs2.size()[3] - inputs1.size()[3]
+        offset3 = outputs2.size()[4] - inputs1.size()[4]
+        padding = [offset3 // 2, offset3 - offset3 // 2, offset2//2, offset2-offset2//2, offset1//2, offset1-offset1//2]
+        outputs1 = nn.functional.pad(inputs1, padding)
+
+        output = torch.cat([outputs1, outputs2], 1)
+
+        output = self.conv(output)
+        return output
+
+
+class unet3d(nn.Module):
+    def __init__(
+        self,
+        feature_scale=4,
+        n_classes=2,
+        is_deconv=True,
+        in_channels=1,
+        is_batchnorm=True,
+    ):
+        super(unet3d, self).__init__()
+        self.is_deconv = is_deconv
+        self.in_channels = in_channels
+        self.is_batchnorm = is_batchnorm
+        self.feature_scale = feature_scale
+
+        # filters = [64, 128, 256, 512, 1024]
+        filters = [64, 128, 256, 512]
+        filters = [int(x / self.feature_scale) for x in filters]
+
+        # downsampling
+        self.conv1 = unetConv2_3d(self.in_channels, filters[0], self.is_batchnorm)
+        self.maxpool1 = nn.MaxPool3d(kernel_size=2)
+
+        self.conv2 = unetConv2_3d(filters[0], filters[1], self.is_batchnorm)
+        self.maxpool2 = nn.MaxPool3d(kernel_size=2)
+
+        self.conv3 = unetConv2_3d(filters[1], filters[2], self.is_batchnorm)
+        self.maxpool3 = nn.MaxPool3d(kernel_size=2)
+
+        # self.conv4 = unetConv2_3d(filters[2], filters[3], self.is_batchnorm)
+        # self.maxpool4 = nn.MaxPool3d(kernel_size=2)
+
+        # self.center = unetConv2_3d(filters[3], filters[4], self.is_batchnorm)
+        self.center = unetConv2_3d(filters[2], filters[3], self.is_batchnorm)
+
+        # upsampling
+        # self.up_concat4 = unetUp3d(filters[4], filters[3], self.is_deconv)
+        self.up_concat3 = unetUp3d(filters[3], filters[2], self.is_deconv)
+        self.up_concat2 = unetUp3d(filters[2], filters[1], self.is_deconv)
+        self.up_concat1 = unetUp3d(filters[1], filters[0], self.is_deconv)
+
+        # final conv (without any concat)
+        # self.final = nn.Conv3d(filters[0], n_classes, 1)
+        self.final = nn.Conv3d(filters[0], 1, 1)
+
+
+    def forward(self, inputs):
+        conv1 = self.conv1(inputs)
+        maxpool1 = self.maxpool1(conv1)
+
+        conv2 = self.conv2(maxpool1)
+        maxpool2 = self.maxpool2(conv2)
+
+        conv3 = self.conv3(maxpool2)
+        maxpool3 = self.maxpool3(conv3)
+
+        # conv4 = self.conv4(maxpool3)
+        # log('unet3d: after conv4 size is {}'.format(conv4.size()))
+        # maxpool4 = self.maxpool4(conv4)
+        # log('unet3d: after maxpool4 size is {}'.format(maxpool4.size()))
+
+        center = self.center(maxpool3)
+        # up4 = self.up_concat4(conv3, center)
+        up3 = self.up_concat3(conv3, center)
+        up2 = self.up_concat2(conv2, up3)
+        up1 = self.up_concat1(conv1, up2)
+
+        # print('up1:', up1.size())
+        final = self.final(up1)
+        # print('final:', final.size())
+
+        return final
+
 
 def get_norm_layer(norm_type='instance'):
     """Return a normalization layer
@@ -154,6 +448,10 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'unet_3d':
+        net = Unet3DGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'unet_3d_cust':
+        net = unet3d()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -194,6 +492,8 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
 
     if netD == 'basic':  # default PatchGAN classifier
         net = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer)
+    elif netD == 'basic_3d':
+        net = NLayer3D_Discriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer)
     elif netD == 'n_layers':  # more options
         net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer)
     elif netD == 'pixel':     # classify if each pixel is real or fake
@@ -433,6 +733,108 @@ class ResnetBlock(nn.Module):
         return out
 
 
+class Unet3DGenerator(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm3d, use_dropout=False):
+        """Construct a Unet generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            num_downs (int) -- the number of downsamplings in UNet. For example, # if |num_downs| == 7,
+                                image of size 128x128 will become of size 1x1 # at the bottleneck
+            ngf (int)       -- the number of filters in the last conv layer
+            norm_layer      -- normalization layer
+
+        We construct the U-Net from the innermost layer to the outermost layer.
+        It is a recursive process.
+        """
+        super(Unet3DGenerator, self).__init__()
+        # construct unet structure
+        unet_block = Unet3DSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
+        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
+            unet_block = Unet3DSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
+        # gradually reduce the number of filters from ngf * 8 to ngf
+        unet_block = Unet3DSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        unet_block = Unet3DSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        unet_block = Unet3DSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+        self.model = Unet3DSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
+
+    def forward(self, input):
+        """Standard forward"""
+        return self.model(input)
+
+
+class Unet3DSkipConnectionBlock(nn.Module):
+    """Defines the Unet submodule with skip connection.
+        X -------------------identity----------------------
+        |-- downsampling -- |submodule| -- upsampling --|
+    """
+
+    def __init__(self, outer_nc, inner_nc, input_nc=None,
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm3d, use_dropout=False):
+        """Construct a Unet submodule with skip connections.
+
+        Parameters:
+            outer_nc (int) -- the number of filters in the outer conv layer
+            inner_nc (int) -- the number of filters in the inner conv layer
+            input_nc (int) -- the number of channels in input images/features
+            submodule (UnetSkipConnectionBlock) -- previously defined submodules
+            outermost (bool)    -- if this module is the outermost module
+            innermost (bool)    -- if this module is the innermost module
+            norm_layer          -- normalization layer
+            user_dropout (bool) -- if use dropout layers.
+        """
+        super(Unet3DSkipConnectionBlock, self).__init__()
+        self.outermost = outermost
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm3d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm3d
+        if input_nc is None:
+            input_nc = outer_nc
+        downconv = nn.Conv3d(input_nc, inner_nc, kernel_size=4,
+                             stride=2, padding=1, bias=use_bias)
+        downrelu = nn.LeakyReLU(0.2, True)
+        downnorm = nn.BatchNorm3d(inner_nc)
+        uprelu = nn.ReLU(True)
+        upnorm = nn.BatchNorm3d(outer_nc)
+
+        if outermost:
+            upconv = nn.ConvTranspose3d(inner_nc * 2, outer_nc,
+                                        kernel_size=4, stride=2,
+                                        padding=1)
+            down = [downconv]
+            up = [uprelu, upconv, nn.Tanh()]
+            model = down + [submodule] + up
+        elif innermost:
+            upconv = nn.ConvTranspose3d(inner_nc, outer_nc,
+                                        kernel_size=4, stride=2,
+                                        padding=1, bias=use_bias)
+            down = [downrelu, downconv]
+            up = [uprelu, upconv, upnorm]
+            model = down + up
+        else:
+            upconv = nn.ConvTranspose3d(inner_nc * 2, outer_nc,
+                                        kernel_size=4, stride=2,
+                                        padding=1, bias=use_bias)
+            down = [downrelu, downconv, downnorm]
+            up = [uprelu, upconv, upnorm]
+
+            if use_dropout:
+                model = down + [submodule] + up + [nn.Dropout(0.5)]
+            else:
+                model = down + [submodule] + up
+
+        self.model = nn.Sequential(*model)
+
+    def forward(self, x):
+        if self.outermost:
+            return self.model(x)
+        else:   # add skip connections
+            return torch.cat([x, self.model(x)], 1)
+
+
 class UnetGenerator(nn.Module):
     """Create a Unet-based generator"""
 
@@ -581,6 +983,114 @@ class NLayerDiscriminator(nn.Module):
     def forward(self, input):
         """Standard forward."""
         return self.model(input)
+
+
+# class NLayer3D_Discriminator(nn.Module):
+#     """Defines a PatchGAN discriminator"""
+#
+#     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm3d):
+#         """Construct a PatchGAN discriminator
+#
+#         Parameters:
+#             input_nc (int)  -- the number of channels in input images
+#             ndf (int)       -- the number of filters in the last conv layer
+#             n_layers (int)  -- the number of conv layers in the discriminator
+#             norm_layer      -- normalization layer
+#         """
+#         super(NLayer3D_Discriminator, self).__init__()
+#         if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+#             use_bias = norm_layer.func == nn.InstanceNorm3d
+#         else:
+#             use_bias = norm_layer == nn.InstanceNorm3d
+#
+#         kw = 4
+#         padw = 1
+#         sequence = [nn.Conv3d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
+#         nf_mult = 1
+#         nf_mult_prev = 1
+#         for n in range(1, n_layers):  # gradually increase the number of filters
+#             nf_mult_prev = nf_mult
+#             nf_mult = min(2 ** n, 8)
+#             sequence += [
+#                 nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+#                 nn.BatchNorm3d(ndf * nf_mult),
+#                 nn.LeakyReLU(0.2, True)
+#             ]
+#
+#         nf_mult_prev = nf_mult
+#         nf_mult = min(2 ** n_layers, 8)
+#         sequence += [
+#             nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
+#             nn.BatchNorm3d(ndf * nf_mult),
+#             nn.LeakyReLU(0.2, True)
+#         ]
+#
+#         sequence += [nn.Conv3d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+#         self.model = nn.Sequential(*sequence)
+#
+#     def forward(self, input):
+#         """Standard forward."""
+#         print('D in:', input.shape)
+#         output = self.model(input)
+#         print('D out:', output.shape)
+#         return output
+
+
+class NLayer3D_Discriminator(nn.Module):
+    """Defines a PatchGAN discriminator"""
+
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm3d):
+        """Construct a PatchGAN discriminator
+
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+            n_layers (int)  -- the number of conv layers in the discriminator
+            norm_layer      -- normalization layer
+        """
+        super(NLayer3D_Discriminator, self).__init__()
+        # if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+        #     use_bias = norm_layer.func == nn.InstanceNorm3d
+        # else:
+        #     use_bias = norm_layer == nn.InstanceNorm3d
+
+        use_bias = False
+        kw = 4
+
+        self.conv1 = nn.Conv3d(input_nc, ndf, kernel_size=kw, stride=2, padding=1)
+        self.relu1 = nn.LeakyReLU(0.2, True)
+        nf_mult = 1
+        nf_mult_prev = 1
+        # for n in range(1, n_layers):  # gradually increase the number of filters
+        #     nf_mult_prev = nf_mult
+        #     nf_mult = min(2 ** n, 8)
+        #     sequence += [
+        #         nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=1, bias=use_bias),
+        #         nn.BatchNorm3d(ndf * nf_mult),
+        #         nn.LeakyReLU(0.2, True)
+        #     ]
+        #
+        # nf_mult_prev = nf_mult
+        # nf_mult = min(2 ** n_layers, 8)
+        # sequence += [
+        #     nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=1, bias=use_bias),
+        #     nn.BatchNorm3d(ndf * nf_mult),
+        #     nn.LeakyReLU(0.2, True)
+        # ]
+        self.conv2 = conv3DBatchNormRelu(ndf, ndf*2, k_size=kw, stride=2, padding=1)
+
+        self.final = nn.Conv3d(ndf * 2, 1, kernel_size=kw, stride=1, padding=1)  # output 1 channel prediction map
+
+    def forward(self, input):
+        """Standard forward."""
+        # print(type(input))
+        # print('D in:', input.size())
+        conv1 = self.conv1(input)
+        relu1 = self.relu1(conv1)
+        conv2 = self.conv2(relu1)
+        final = self.final(conv2)
+        return final
+
 
 
 class PixelDiscriminator(nn.Module):
