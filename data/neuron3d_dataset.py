@@ -49,11 +49,11 @@ class Neuron3DDataset(BaseDataset):
         A_path = self.A_paths[index]
         B_path = self.B_paths[index]
 
-        # for 2d
-        # A = Image.open(A_path).convert('RGB')
-        # B = Image.open(B_path).convert('RGB')
+        # A is GT (0-255), B is neuro image (0-255)
         A = self.loadtiff3d(A_path)
         B = self.loadtiff3d(B_path)
+        A = A.astype(float) / 255.0
+        B = B.astype(float) / 255.0
 
         # AB_path = self.AB_paths[index]
         # AB = Image.open(AB_path).convert('RGB')
@@ -67,6 +67,8 @@ class Neuron3DDataset(BaseDataset):
         # transform_params = get_params_3d(self.opt, A.shape)
         # A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
         # B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
+
+        # size: NCHW
         A, B = get_transform_3d(self.opt.crop_size_3d, A, B)
         # TODO: Add augumentation?
 

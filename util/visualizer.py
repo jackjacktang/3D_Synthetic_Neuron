@@ -33,24 +33,48 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256, save_
     webpage.add_header(name)
     ims, txts, links = [], [], []
 
-    for label, im_data in visuals.items():
-        im = util.tensor2im(im_data)
-        # print(im.shape)
-        if save_type == '3d':
-            image_name = '%s_%s.tif' % (name, label)
-            save_path = os.path.join(image_dir, image_name)
-            print(save_path)
-            print(im.shape)
-            util.save_image_3d(im, save_path)
-            return
-        else:
-            image_name = '%s_%s.png' % (name, label)
-            save_path = os.path.join(image_dir, image_name)
-            util.save_image(im, save_path, aspect_ratio=aspect_ratio)
-            ims.append(image_name)
-            txts.append(label)
-            links.append(image_name)
-    webpage.add_images(ims, txts, links, width=width)
+    current_results = []
+    current_labels = []
+
+    if save_type == '2d':
+        for label, im_data in visuals.items():
+            im = util.tensor2im(im_data)
+            if len(current_results) != 0:
+                current_results = np.concatenate((current_results, im), axis=1)
+                current_labels.append(label)
+            else:
+                current_results = im
+                current_labels = [label]
+
+        image_name = '%s_%s_%s_%s.png' % (name, current_labels[0], current_labels[1], current_labels[2])
+        save_path = os.path.join(image_dir, image_name)
+        util.save_image(current_results, save_path, aspect_ratio)
+        ims.append(image_name)
+        txts.append(label[0]+label[1]+label[2])
+        links.append(image_name)
+    elif save_type == '3d':
+        for label, im_data in visuals.items():
+            im = util.tensor2im(im_data, type='3d')
+            imxy = im.max(axis=2)
+
+            util.save_image_3d(im, os.path.join(image_dir, '%s_%s.tif' % (name, label)))
+
+            # save xy plane projection
+            if len(current_results) != 0:
+                current_results = np.concatenate((current_results, imxy), axis=1)
+                current_labels.append(label)
+            else:
+                current_results = imxy
+                current_labels = [label]
+
+        image_name = '%s_%s_%s_%s.png' % (name, current_labels[0], current_labels[1], current_labels[2])
+        save_path = os.path.join(image_dir, image_name)
+        current_results = np.tile(current_results, (1, 1, 3))
+        util.save_image(current_results, save_path, aspect_ratio)
+        ims.append(image_name)
+        txts.append(label[0] + label[1] + label[2])
+        links.append(image_name)
+    # webpage.add_images(ims, txts, links, width=width)
 
 
 class Visualizer():
@@ -166,10 +190,22 @@ class Visualizer():
         if self.use_html and (save_result or not self.saved):  # save images to an HTML file if they haven't been saved.
             self.saved = True
             # save images to the disk
+            current_results = []
+            current_labels = []
             for label, image in visuals.items():
-                image_numpy = util.tensor2im(image)
-                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
-                util.save_image(image_numpy, img_path)
+                im = util.tensor2im(image)
+                if len(current_results) != 0:
+                    current_results = np.concatenate((current_results, im), axis=1)
+                    current_labels.append(label)
+                else:
+                    current_results = im
+                    current_labels = [label]
+
+            print(current_labels)
+            image_name = 'epoch%.3d_%s_%s_%s.png' % (epoch, current_labels[0], current_labels[1], current_labels[2])
+            print(image_name)
+            save_path = os.path.join(self.img_dir, image_name)
+            util.save_image(current_results, save_path, 1)
 
             # update website
             webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, refresh=1)
@@ -177,14 +213,136 @@ class Visualizer():
                 webpage.add_header('epoch [%d]' % n)
                 ims, txts, links = [], [], []
 
+                current_results = []
+                current_labels = []
                 for label, image_numpy in visuals.items():
                     image_numpy = util.tensor2im(image)
-                    img_path = 'epoch%.3d_%s.png' % (n, label)
-                    ims.append(img_path)
-                    txts.append(label)
-                    links.append(img_path)
+                    im = util.tensor2im(image)
+                    if len(current_results) != 0:
+                        current_results = np.concatenate((current_results, im), axis=1)
+                        current_labels.append(label)
+                    else:
+                        current_results = im
+                        current_labels = [label]
+
+                image_name = 'epoch%.3d_%s_%s_%s.png' % (n, current_labels[0], current_labels[1], current_labels[2])
+                save_path = os.path.join(self.img_dir, image_name)
+                ims.append(save_path)
+                txts.append(label)
+                links.append(save_path)
                 webpage.add_images(ims, txts, links, width=self.win_size)
             webpage.save()
+
+
+    def display_current_results_3D(self, visuals, epoch, save_result):
+        """Display current results on visdom; save current results to an HTML file.
+
+        Parameters:
+            visuals (OrderedDict) - - dictionary of images to display or save
+            epoch (int) - - the current epoch
+            save_result (bool) - - if save the current results to an HTML file
+        """
+        # if self.display_id > 0:  # show images in the browser using visdom
+        #     ncols = self.ncols
+        #     if ncols > 0:        # show all the images in one visdom panel
+        #         ncols = min(ncols, len(visuals))
+        #         h, w = next(iter(visuals.values())).shape[:2]
+        #         table_css = """<style>
+        #                 table {border-collapse: separate; border-spacing: 4px; white-space: nowrap; text-align: center}
+        #                 table td {width: % dpx; height: % dpx; padding: 4px; outline: 4px solid black}
+        #                 </style>""" % (w, h)  # create a table css
+        #         # create a table of images.
+        #         title = self.name
+        #         label_html = ''
+        #         label_html_row = ''
+        #         images = []
+        #         idx = 0
+        #         for label, image in visuals.items():
+        #             image_numpy = util.tensor2im(image)
+        #             print(image_numpy.shape)
+        #             imgxy2d = image_numpy.max(axis=2)
+        #             label_html_row += '<td>%s</td>' % label
+        #             images.append(imgxy2d)
+        #             idx += 1
+        #             if idx % ncols == 0:
+        #                 label_html += '<tr>%s</tr>' % label_html_row
+        #                 label_html_row = ''
+        #         # white_image = np.ones_like(image_numpy.transpose([2, 0, 1])) * 255
+        #         white_image = np.ones_like(imgxy2d) * 255
+        #         while idx % ncols != 0:
+        #             images.append(white_image)
+        #             label_html_row += '<td></td>'
+        #             idx += 1
+        #         if label_html_row != '':
+        #             label_html += '<tr>%s</tr>' % label_html_row
+        #         try:
+        #             self.vis.images(images, nrow=ncols, win=self.display_id + 1,
+        #                             padding=2, opts=dict(title=title + ' images'))
+        #             label_html = '<table>%s</table>' % label_html
+        #             self.vis.text(table_css + label_html, win=self.display_id + 2,
+        #                           opts=dict(title=title + ' labels'))
+        #         except VisdomExceptionBase:
+        #             self.create_visdom_connections()
+        #
+        #     else:     # show each image in a separate visdom panel;
+        #         idx = 1
+        #         try:
+        #             for label, image in visuals.items():
+        #                 image_numpy = util.tensor2im(image)
+        #                 imgxy2d = image_numpy.max(axis=2)
+        #
+        #                 # self.vis.image(image_numpy.transpose([2, 0, 1]), opts=dict(title=label),
+        #                 #                win=self.display_id + idx)
+        #                 self.vis.image(imgxy2d, opts=dict(title=label),
+        #                                win=self.display_id + idx)
+        #                 idx += 1
+        #         except VisdomExceptionBase:
+        #             self.create_visdom_connections()
+
+        if self.use_html and (save_result or not self.saved):  # save images to an HTML file if they haven't been saved.
+            self.saved = True
+            # save images to the disk
+            current_results = []
+            current_labels = []
+            for label, image in visuals.items():
+                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.tif' % (epoch, label))
+                print(label)
+                im = util.tensor2im(image, type='3d')
+                imxy = im.max(axis=2)
+
+                util.save_image_3d(im, img_path)
+
+                # save xy plane projection
+                if len(current_results) != 0:
+                    current_results = np.concatenate((current_results, imxy), axis=1)
+                    current_labels.append(label)
+                else:
+                    current_results = imxy
+                    current_labels = [label]
+
+            image_name = 'epoch%.3d_%s_%s_%s.png' % (epoch, current_labels[0], current_labels[1], current_labels[2])
+            save_path = os.path.join(self.img_dir, image_name)
+            current_results = np.tile(current_results, (1, 1, 3))
+            util.save_image(current_results, save_path)
+            # ims.append(image_name)
+            # txts.append(label[0] + label[1] + label[2])
+            # links.append(image_name)
+
+            # # update website
+            # webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, refresh=1)
+            # for n in range(epoch, 0, -1):
+            #     webpage.add_header('epoch [%d]' % n)
+            #     ims, txts, links = [], [], []
+            #
+            #     for label, image_numpy in visuals.items():
+            #         image_numpy = util.tensor2im(image)
+            #         img_path = 'epoch%.3d_%s.png' % (n, label)
+            #         ims.append(img_path)
+            #         txts.append(label)
+            #         links.append(img_path)
+            #     webpage.add_images(ims, txts, links, width=self.win_size)
+            # webpage.save()
+
 
     def plot_current_losses(self, epoch, counter_ratio, losses):
         """display the current losses on visdom display: dictionary of error labels and values

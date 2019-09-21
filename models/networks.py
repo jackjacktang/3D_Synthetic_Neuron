@@ -121,7 +121,7 @@ class deconv3DBatchNormRelu(nn.Module):
                 stride=stride,
                 bias=bias,
             ),
-            nn.BatchNorm2d(int(n_filters)),
+            nn.BatchNorm3d(int(n_filters)),
             nn.ReLU(inplace=True),
         )
 
@@ -235,6 +235,61 @@ class unetUp3d(nn.Module):
         return output
 
 
+class linknetUp3D(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, output_padding=0):
+        super(linknetUp3D, self).__init__()
+
+        # B, 2C, H, W -> B, C/2, H, W
+        self.convbnrelu1 = conv3DBatchNormRelu(
+            in_planes, in_planes/4, k_size=1, stride=1, padding=0
+        )
+
+        # B, C/2, H, W -> B, C/2, H, W
+        self.deconvbnrelu2 = deconv3DBatchNormRelu(
+            in_planes/4, in_planes/4, k_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding
+        )
+
+        # B, C/2, H, W -> B, C, H, W
+        self.convbnrelu3 = conv3DBatchNormRelu(
+            in_planes/4, out_planes, k_size=1, stride=1, padding=0
+        )
+
+    def forward(self, x):
+        # print(x.shape)
+        x = self.convbnrelu1(x)
+        # print(x.shape)
+        x = self.deconvbnrelu2(x)
+        # print(x.shape)
+        x = self.convbnrelu3(x)
+        # print(x.shape)
+        return x
+
+
+class residualBlock3D(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_channels, n_filters, stride=1, downsample=None):
+        super(residualBlock3D, self).__init__()
+
+        self.convbnrelu1 = conv3DBatchNormRelu(in_channels, n_filters, 3, stride, 1, bias=False)
+        self.convbn2 = conv3DBatchNorm(n_filters, n_filters, 3, 1, 1, bias=False)
+        self.downsample = downsample
+        self.stride = stride
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = x
+        out = self.convbnrelu1(x)
+        out = self.convbn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+        return out
+
+
 class unet3d(nn.Module):
     def __init__(
         self,
@@ -291,11 +346,6 @@ class unet3d(nn.Module):
         conv3 = self.conv3(maxpool2)
         maxpool3 = self.maxpool3(conv3)
 
-        # conv4 = self.conv4(maxpool3)
-        # log('unet3d: after conv4 size is {}'.format(conv4.size()))
-        # maxpool4 = self.maxpool4(conv4)
-        # log('unet3d: after maxpool4 size is {}'.format(maxpool4.size()))
-
         center = self.center(maxpool3)
         # up4 = self.up_concat4(conv3, center)
         up3 = self.up_concat3(conv3, center)
@@ -307,6 +357,123 @@ class unet3d(nn.Module):
         # print('final:', final.size())
 
         return final
+
+
+class linknet3D(nn.Module):
+    def __init__(
+        self, feature_scale=4, n_classes=1, is_deconv=True, in_channels=1, is_batchnorm=True, layers=18
+    ):
+        super(linknet3D, self).__init__()
+        self.is_deconv = is_deconv
+        self.in_channels = in_channels
+        self.is_batchnorm = is_batchnorm
+        self.feature_scale = feature_scale
+        if layers == 18:
+            self.layers = [2, 2, 2, 2] # Currently hardcoded for ResNet-18
+        elif layers == 34:
+            self.layers = [3, 4, 6, 3]
+
+        filters = [64, 128, 256, 512]
+        # filters = [int(x / self.feature_scale) for x in filters]
+
+        self.inplanes = filters[0]
+
+        # Encoder
+        self.convbnrelu1 = conv3DBatchNormRelu(
+            in_channels=1, k_size=7, n_filters=64, padding=3, stride=2, bias=False
+        )
+        self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
+
+        block = residualBlock3D
+        self.encoder1 = self._make_layer(block, filters[0], self.layers[0])
+        self.encoder2 = self._make_layer(block, filters[1], self.layers[1], stride=2)
+        self.encoder3 = self._make_layer(block, filters[2], self.layers[2], stride=2)
+        self.encoder4 = self._make_layer(block, filters[3], self.layers[3], stride=2)
+        self.avgpool = nn.AvgPool3d(7)
+
+        # Decoder
+        self.decoder4 = linknetUp3D(filters[3], filters[2], 3, 2, 1, 1)
+        self.decoder3 = linknetUp3D(filters[2], filters[1], 3, 2, 1, 1)
+        self.decoder2 = linknetUp3D(filters[1], filters[0], 3, 2, 1, 1)
+        self.decoder1 = linknetUp3D(filters[0], filters[0], 3, 1, 1, 0)
+
+        # Final Classifier
+        self.finaldeconvbnrelu1 = nn.Sequential(
+            nn.ConvTranspose3d(filters[0], 32, 3, 2, 1, 1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(inplace=True),
+        )
+        self.finalconvbnrelu2 = conv3DBatchNormRelu(
+            in_channels=32,
+            k_size=3,
+            n_filters=32,
+            padding=1,
+            stride=1,
+        )
+        self.finalconv3 = nn.ConvTranspose3d(32, n_classes, 2, 2, 0)
+
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv3d(
+                    self.inplanes,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
+                nn.BatchNorm3d(planes * block.expansion),
+            )
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        # Encoder
+        # print('x', x.shape)
+        x = self.convbnrelu1(x)
+        # print('x', x.shape)
+        x = self.maxpool(x)
+        # print('x', x.shape)
+
+        e1 = self.encoder1(x)
+        # print('e1', e1.shape)
+        e2 = self.encoder2(e1)
+        # print('e2', e2.shape)
+        e3 = self.encoder3(e2)
+        # print('e3', e3.shape)
+        e4 = self.encoder4(e3)
+        # print('e4', e4.shape)
+
+        # Decoder with Skip Connections
+        d4 = self.decoder4(e4) + e3
+        # print('d4', d4.shape)
+        # d4 += e3
+        # print('d4', d4.shape)
+        d3 = self.decoder3(d4) + e2
+        # print('d3', d3.shape)
+        # d3 += e2
+        # print('d3', d3.shape)
+        d2 = self.decoder2(d3) + e1
+        # print('d2', d2.shape)
+        # d2 += e1
+        # print('d2', d2.shape)
+        d1 = self.decoder1(d2)
+        # print('d1', d1.shape)
+
+        # Final Classification
+        f1 = self.finaldeconvbnrelu1(d1)
+        # print('f1', f1.shape)
+        f2 = self.finalconvbnrelu2(f1)
+        # print('f2', f2.shape)
+        f3 = self.finalconv3(f2)
+        # print('f3', f3.shape)
+
+        return f3
 
 
 def get_norm_layer(norm_type='instance'):
@@ -452,6 +619,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = Unet3DGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_3d_cust':
         net = unet3d()
+    elif netG == 'linknet_3d':
+        net = linknet3D()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -493,7 +662,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
     if netD == 'basic':  # default PatchGAN classifier
         net = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer)
     elif netD == 'basic_3d':
-        net = NLayer3D_Discriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer)
+        net = NLayer3D_Discriminator(2, ndf, n_layers=3, norm_layer=norm_layer)
     elif netD == 'n_layers':  # more options
         net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer)
     elif netD == 'pixel':     # classify if each pixel is real or fake
@@ -985,57 +1154,6 @@ class NLayerDiscriminator(nn.Module):
         return self.model(input)
 
 
-# class NLayer3D_Discriminator(nn.Module):
-#     """Defines a PatchGAN discriminator"""
-#
-#     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm3d):
-#         """Construct a PatchGAN discriminator
-#
-#         Parameters:
-#             input_nc (int)  -- the number of channels in input images
-#             ndf (int)       -- the number of filters in the last conv layer
-#             n_layers (int)  -- the number of conv layers in the discriminator
-#             norm_layer      -- normalization layer
-#         """
-#         super(NLayer3D_Discriminator, self).__init__()
-#         if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
-#             use_bias = norm_layer.func == nn.InstanceNorm3d
-#         else:
-#             use_bias = norm_layer == nn.InstanceNorm3d
-#
-#         kw = 4
-#         padw = 1
-#         sequence = [nn.Conv3d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
-#         nf_mult = 1
-#         nf_mult_prev = 1
-#         for n in range(1, n_layers):  # gradually increase the number of filters
-#             nf_mult_prev = nf_mult
-#             nf_mult = min(2 ** n, 8)
-#             sequence += [
-#                 nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-#                 nn.BatchNorm3d(ndf * nf_mult),
-#                 nn.LeakyReLU(0.2, True)
-#             ]
-#
-#         nf_mult_prev = nf_mult
-#         nf_mult = min(2 ** n_layers, 8)
-#         sequence += [
-#             nn.Conv3d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
-#             nn.BatchNorm3d(ndf * nf_mult),
-#             nn.LeakyReLU(0.2, True)
-#         ]
-#
-#         sequence += [nn.Conv3d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
-#         self.model = nn.Sequential(*sequence)
-#
-#     def forward(self, input):
-#         """Standard forward."""
-#         print('D in:', input.shape)
-#         output = self.model(input)
-#         print('D out:', output.shape)
-#         return output
-
-
 class NLayer3D_Discriminator(nn.Module):
     """Defines a PatchGAN discriminator"""
 
@@ -1083,8 +1201,6 @@ class NLayer3D_Discriminator(nn.Module):
 
     def forward(self, input):
         """Standard forward."""
-        # print(type(input))
-        # print('D in:', input.size())
         conv1 = self.conv1(input)
         relu1 = self.relu1(conv1)
         conv2 = self.conv2(relu1)

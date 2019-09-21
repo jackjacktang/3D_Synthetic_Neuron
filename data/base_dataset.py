@@ -150,6 +150,7 @@ def get_transform_3d(crop_size, A, B):
     y = randint(0, shape[1] - cropy) if zoomy == 1 else 0
     z = randint(0, shape[2] - cropz) if zoomz == 1 else 0
 
+    # To avoid crop all background voxels
     A_crop = A[x:x + cropx, y:y + cropy, z:z + cropz].copy()
     B_crop = B[x:x + cropx, y:y + cropy, z:z + cropz].copy()
 

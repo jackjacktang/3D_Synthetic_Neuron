@@ -50,12 +50,16 @@ if __name__ == '__main__':
             model.set_input(data)         # unpack data from dataset and apply preprocessing
             model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
 
-            if total_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
+            # if total_iters % opt.display_freq == 0:
+            if total_iters % opt.display_freq == 0 :   # display images on visdom and save images to a HTML file
                 save_result = total_iters % opt.update_html_freq == 0
                 model.compute_visuals()
 
                 # TODO: visualize 3D
-                # visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+                if opt.save_type == '2d':
+                    visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+                elif opt.save_type == '3d':
+                    visualizer.display_current_results_3D(model.get_current_visuals(), epoch, save_result)
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 losses = model.get_current_losses()
