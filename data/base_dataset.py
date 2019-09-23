@@ -157,7 +157,6 @@ def get_transform_3d(crop_size, A, B):
     return A_crop, B_crop
 
 
-
 def __make_power_2(img, base, method=Image.BICUBIC):
     ow, oh = img.size
     h = int(round(oh / base) * base)

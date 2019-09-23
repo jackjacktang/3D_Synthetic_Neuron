@@ -84,15 +84,27 @@ class Pix2PixModel(BaseModel):
         AtoB = self.opt.direction == 'AtoB'
         temp_real_A = input['A' if AtoB else 'B']
         temp_real_B = input['B' if AtoB else 'A']
+        print('realatype1', type(temp_real_A))
+        print('realbtype1', type(temp_real_B))
         if self.opt.save_type == '2d':
             self.real_A = temp_real_A.to(self.device)
             self.real_B = temp_real_B.to(self.device)
             self.image_paths = input['A_paths' if AtoB else 'B_paths']
         elif self.opt.save_type == '3d':
-            temp_real_A = torch.unsqueeze(temp_real_A, 1).type(torch.FloatTensor)
-            temp_real_B = torch.unsqueeze(temp_real_B, 1).type(torch.FloatTensor)
-            self.real_A = temp_real_A.to(self.device)
-            self.real_B = temp_real_B.to(self.device)
+            if not self.isTrain:
+                temp_real_A = torch.from_numpy(temp_real_A)
+                temp_real_B = torch.from_numpy(temp_real_B)
+                temp_real_A = torch.unsqueeze(temp_real_A, 0).type(torch.FloatTensor)
+                temp_real_B = torch.unsqueeze(temp_real_B, 0).type(torch.FloatTensor)
+                temp_real_A = torch.unsqueeze(temp_real_A, 0).type(torch.FloatTensor)
+                temp_real_B = torch.unsqueeze(temp_real_B, 0).type(torch.FloatTensor)
+                self.real_A = temp_real_A.to(self.device)
+                self.real_B = temp_real_B.to(self.device)
+            else:
+                temp_real_A = torch.unsqueeze(temp_real_A, 1).type(torch.FloatTensor)
+                temp_real_B = torch.unsqueeze(temp_real_B, 1).type(torch.FloatTensor)
+                self.real_A = temp_real_A.to(self.device)
+                self.real_B = temp_real_B.to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
@@ -140,3 +152,6 @@ class Pix2PixModel(BaseModel):
         self.optimizer_G.zero_grad()        # set G's gradients to zero
         self.backward_G()                   # calculate graidents for G
         self.optimizer_G.step()             # udpate G's weights
+
+    def get_fake_B(self):
+        return self.fake_B
