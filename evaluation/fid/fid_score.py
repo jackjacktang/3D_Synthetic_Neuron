@@ -284,12 +284,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
-    # path_real = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/2d_neuron_pix2pix/test_latest/images/individual_results/real_B'
-    # path_fake = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/2d_neuron_pix2pix/test_latest/images/individual_results/fake_B'
+    path_real = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/2d_neuron_pix2pix/test_latest/images/individual_results/real_B'
+    path_fake = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/2d_neuron_pix2pix/test_latest/images/individual_results/real_B'
     # path_real = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_unet_neuron_z32/test_full/fake_B_project'
     # path_fake = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_unet_neuron_z32/test_full/real_B_project'
-    path_real = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_linknet_neuron/test_full/real_B_project'
-    path_fake = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_linknet_neuron/test_full/real_B_project'
+    # path_real = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_linknet_neuron/test_full/real_B_project'
+    # path_fake = '/media/jacktang/Work/USYD/Research/Deep_Learning/GAN/pytorch-CycleGAN-and-pix2pix/checkpoints/3d_linknet_neuron/test_full/real_B_project'
 
     fid_value = calculate_fid_given_paths([path_real, path_fake],
                                           50,
