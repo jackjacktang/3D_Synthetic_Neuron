@@ -157,6 +157,32 @@ def get_transform_3d(crop_size, A, B):
     return A_crop, B_crop
 
 
+def get_coverage_3d(crop_size, A, B):
+    shape = A.shape
+    crop_size = crop_size.split('x')
+    cropx = int(crop_size[0])
+    cropy = int(crop_size[1])
+    cropz = int(crop_size[2])
+    zoomx = max(shape[0], cropx) / shape[0]
+    zoomy = max(shape[1], cropy) / shape[1]
+    zoomz = max(shape[2], cropz) / shape[2]
+    A = zoom(A, (zoomx, zoomy, zoomz))
+    B = zoom(B, (zoomx, zoomy, zoomz))
+
+    A_crop = 0.0
+    aug_ctr = 0
+    while np.sum(A_crop)/cropx*cropy*cropz < 0.01:
+        x = randint(0, shape[0] - cropx) if zoomx == 1 else 0
+        y = randint(0, shape[1] - cropy) if zoomy == 1 else 0
+        z = randint(0, shape[2] - cropz) if zoomz == 1 else 0
+
+        # To avoid crop all background voxels
+        A_crop = A[x:x + cropx, y:y + cropy, z:z + cropz].copy()
+    B_crop = B[x:x + cropx, y:y + cropy, z:z + cropz].copy()
+
+    return A_crop, B_crop
+
+
 def __make_power_2(img, base, method=Image.BICUBIC):
     ow, oh = img.size
     h = int(round(oh / base) * base)

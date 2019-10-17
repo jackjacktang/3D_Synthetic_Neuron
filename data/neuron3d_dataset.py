@@ -1,5 +1,5 @@
 import os.path
-from data.base_dataset import BaseDataset, get_params, get_params_3d, get_transform, get_transform_3d
+from data.base_dataset import BaseDataset, get_params, get_params_3d, get_transform, get_transform_3d, get_coverage_3d
 from data.image_folder import make_dataset
 from PIL import Image
 import random
@@ -69,7 +69,7 @@ class Neuron3DDataset(BaseDataset):
         # B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
 
         # size: NCHW
-        A, B = get_transform_3d(self.opt.crop_size_3d, A, B)
+        A, B = get_coverage_3d(self.opt.crop_size_3d, A, B)
         # TODO: Add augumentation?
 
         return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}

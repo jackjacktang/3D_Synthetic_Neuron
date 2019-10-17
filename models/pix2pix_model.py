@@ -84,8 +84,8 @@ class Pix2PixModel(BaseModel):
         AtoB = self.opt.direction == 'AtoB'
         temp_real_A = input['A' if AtoB else 'B']
         temp_real_B = input['B' if AtoB else 'A']
-        print('realatype1', type(temp_real_A))
-        print('realbtype1', type(temp_real_B))
+        # print('realatype1', type(temp_real_A))
+        # print('realbtype1', type(temp_real_B))
         if self.opt.save_type == '2d':
             self.real_A = temp_real_A.to(self.device)
             self.real_B = temp_real_B.to(self.device)
@@ -115,8 +115,8 @@ class Pix2PixModel(BaseModel):
     def backward_D(self):
         """Calculate GAN loss for the discriminator"""
         # Fake; stop backprop to the generator by detaching fake_B
-        fake_AB = torch.cat((self.real_A, self.fake_B), 1)# we use conditional GANs; we need to feed both input and output to the discriminator
         # print(self.real_A.size(), self.fake_B.size())
+        fake_AB = torch.cat((self.real_A, self.fake_B), 1)# we use conditional GANs; we need to feed both input and output to the discriminator
         # print('fake AB', fake_AB.size())
         pred_fake = self.netD(fake_AB.detach())
         self.loss_D_fake = self.criterionGAN(pred_fake, False)
