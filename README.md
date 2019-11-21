@@ -13,7 +13,7 @@ The following packages are required to be installed before running the model:
 * `tqdm==4.32.2`
 * `scikit_image==0.15.0`
 * `scipy==1.0.0`
-* `requests==2.9.1`
+* `requests>=2.20.0`
 * `torchvision==0.3.0`
 * `numpy==1.17.0`
 * `Pillow==6.2.1`
