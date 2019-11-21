@@ -55,7 +55,6 @@ if __name__ == '__main__':
                 save_result = total_iters % opt.update_html_freq == 0
                 model.compute_visuals()
 
-                # TODO: visualize 3D
                 if opt.save_type == '2d':
                     visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
                 elif opt.save_type == '3d':

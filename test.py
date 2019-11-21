@@ -211,7 +211,8 @@ if __name__ == '__main__':
         #     util.util.save_image_3d(uppadded_fake_b, os.path.join(result_path, id+'_fake_B.tif'))
         #     util.util.save_image_3d(loadtiff3d(path[1]), os.path.join(result_path, id+'_real_B.tif'))
 
-            dir_A = os.path.join(opt.dataroot, 'tokyo_gt')  # get the image directory
+            dir_A = os.path.join(opt.dataroot, opt.phase + 'A')
+            # dir_A = os.path.join(opt.dataroot, 'taiwan_gt')  # get the image directory
             # dir_B = os.path.join(opt.dataroot, opt.phase + 'B')
             A_paths = make_dataset(dir_A, opt.max_dataset_size)
             # B_paths = make_dataset(dir_B, opt.max_dataset_size)
@@ -235,8 +236,10 @@ if __name__ == '__main__':
                     model.test()
                     fake_B = model.get_fake_B()
                     fake_B = fake_B.data[0].cpu().float().numpy()
+                    print(np.unique(fake_B))
                     fake_B[fake_B < 0] = 0
                     fake_B *= 255
+                    print(np.unique(fake_B))
                     fake_B[fake_B >= 255] = 255
                     print(fake_B.shape)
                     padded_fake_b[x_s:x_e, y_s:y_e, z_s:z_e] = fake_B

@@ -36,20 +36,16 @@ set -ex
 # G:student D:patch
 python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_deeper_student_patch --checkpoints_dir ../checkpoints --model pix2pix --netG deeper_student --gan_mode vanilla --netD basic_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
 
-# inception student
-# G:student D:pixel [DONE]
-# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_inception_student_pixel --checkpoints_dir ../checkpoints --model pix2pix --netG inception_student --gan_mode vanilla --netD pixel_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
+# unet_mrf
+# G:MRF D:pixel [DONE]
+# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_mrf_pixel --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student --gan_mode vanilla --netD pixel_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
 
-# more inception student
-# G:student D:pixel [DONE]
-# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_more_inception_student_pixel --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student --gan_mode vanilla --netD pixel_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
+# unet_mrf_v2
+# G:MRF2 D:pixel [DONE]
+# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_mrf_v2_pixel --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student_v2 --gan_mode vanilla --netD pixel_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
 
-# more inception student v2
-# G:student D:pixel [DONE]
-# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_more_inception_student_v2_pixel_more --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student_v2 --gan_mode vanilla --netD pixel_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
-
-# d:patch
-# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_more_inception_student_v2_patch_less --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student_v2 --gan_mode vanilla --netD basic_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
+# G:MRF2 D:patch [DONE]
+# python ../train.py --dataroot ../datasets/datasets/fly/fly3d --name 3d_mrf_v2_patch --checkpoints_dir ../checkpoints --model pix2pix --netG moreinception_student_v2 --gan_mode vanilla --netD basic_3d --direction AtoB --lambda_L1 100 --dataset_mode neuron3d --crop_size_3d 128x128x32 --input_nc 1 --output_nc 1 --norm batch --pool_size 0 --batch_size 2 --save_type 3d
 
 
 # 3D ESP-Net

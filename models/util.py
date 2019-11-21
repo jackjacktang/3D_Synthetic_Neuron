@@ -379,9 +379,9 @@ class unetUp3d_regression(nn.Module):
 #         return out
 
 
-class StudentInception(nn.Module):
+class MRF(nn.Module):
     def __init__(self, in_channels, out_channels):
-        super(StudentInception, self).__init__()
+        super(MRF, self).__init__()
 
         self.layer1 = conv3DBatchNormRelu(
             in_channels=in_channels,
@@ -444,11 +444,8 @@ class StudentInception(nn.Module):
         # log('inceptionA - after concat: ' + str(concat.size()))
         path1_final = self.layer1(x)
 
-        # print(x.size())
         path2_1 = self.maxpool(x)
-        # print(path2_1.size())
         path2_final = self.layer2(path2_1)
-        # print(path2_final.size())
 
         path3_1 = self.layer3_1(x)
         path3_final = self.layer3_2(path3_1)
@@ -457,10 +454,6 @@ class StudentInception(nn.Module):
         path4_2 = self.layer4_2(path4_1)
         path4_final = self.layer4_3(path4_2)
 
-        # print(path1_final.size())
-        # print(path2_final.size())
-        # print(path3_final.size())
-        # print(path4_final.size())
         out = torch.add(path1_final, path2_final)
         out = torch.add(out, path3_final)
         out = torch.add(out, path4_final)

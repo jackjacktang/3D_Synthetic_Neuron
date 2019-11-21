@@ -192,7 +192,7 @@ class DeeperStudentRes(nn.Module):
         return final
 
 
-class InceptionStudentRes(nn.Module):
+class unet_mrf(nn.Module):
     def __init__(
             self,
             feature_scale=4,
@@ -201,7 +201,7 @@ class InceptionStudentRes(nn.Module):
             in_channels=1,
             is_batchnorm=True,
     ):
-        super(InceptionStudentRes, self).__init__()
+        super(unet_mrf, self).__init__()
         self.is_deconv = is_deconv
         self.in_channels = in_channels
         self.is_batchnorm = is_batchnorm
@@ -213,14 +213,8 @@ class InceptionStudentRes(nn.Module):
 
         # downsampling
         self.conv1 = unetConv2_3d_regression(self.in_channels, filters[0], self.is_batchnorm, residual_path=True)
-        self.maxpool1 = nn.MaxPool3d(kernel_size=2)
-        # 1x1 convolutions are used to compute reductions before the expensive 3x3 convolutions
-        # self.conv_mid = nn.Conv3d(filters[0], filters[1], kernel_size=1)
-
-        self.conv_mid = StudentInception(filters[0])
-
-        self.maxpool2 = nn.MaxPool3d(kernel_size=2)
-        self.conv3 = unetConv2_3d_regression(filters[1], filters[2], self.is_batchnorm, residual_path=True)
+        self.conv_mid = MRF(filters[0], filters[1])
+        self.conv3 = MRF(filters[1], filters[2])
         self.maxpool3 = nn.MaxPool3d(kernel_size=2)
         self.conv4 = unetConv2_3d_regression(filters[2], filters[3], self.is_batchnorm, residual_path=True)
 
@@ -230,72 +224,9 @@ class InceptionStudentRes(nn.Module):
         self.up_concat1 = unetUp3d_regression(filters[1], filters[0], self.is_deconv, residual_path=True)
 
         # final conv (without any concat)
-        self.smartFinal = nn.Conv3d(filters[0], n_classes, 1)
+        self.final = nn.Conv3d(filters[0], n_classes, 1)
 
-        self.smartTanh = nn.Tanh()
-
-    def forward(self, inputs):
-        conv1 = self.conv1(inputs)
-        maxpool1 = self.maxpool1(conv1)
-
-        conv_2 = self.conv_mid(maxpool1)
-        maxpool2 = self.maxpool2(conv_2)
-
-        conv3 = self.conv3(maxpool2)
-        maxpool3 = self.maxpool3(conv3)
-
-        conv4 = self.conv4(maxpool3)
-
-        up3 = self.up_concat3(conv3, conv4)
-        up2 = self.up_concat2(conv_2, up3)
-        up1 = self.up_concat1(conv1, up2)
-        final = self.smartFinal(up1)
-        final = self.smartTanh(final)
-        return final
-
-
-class MoreInceptionStudentRes(nn.Module):
-    def __init__(
-            self,
-            feature_scale=4,
-            n_classes=1,
-            is_deconv=True,
-            in_channels=1,
-            is_batchnorm=True,
-    ):
-        super(MoreInceptionStudentRes, self).__init__()
-        self.is_deconv = is_deconv
-        self.in_channels = in_channels
-        self.is_batchnorm = is_batchnorm
-        self.feature_scale = feature_scale
-
-        # downsampling
-        filters = [64, 128, 256, 512]  # 16, 32, 64
-        filters = [int(x / self.feature_scale) for x in filters]
-
-        # downsampling
-        self.conv1 = unetConv2_3d_regression(self.in_channels, filters[0], self.is_batchnorm, residual_path=True)
-        # self.maxpool1 = nn.MaxPool3d(kernel_size=2)
-        # 1x1 convolutions are used to compute reductions before the expensive 3x3 convolutions
-        # self.conv_mid = nn.Conv3d(filters[0], filters[1], kernel_size=1)
-
-        self.conv_mid = StudentInception(filters[0], filters[1])
-
-        # self.maxpool2 = nn.MaxPool3d(kernel_size=2)
-        # self.conv3 = unetConv2_3d_regression(filters[1], filters[2], self.is_batchnorm, residual_path=True)
-        self.conv3 = StudentInception(filters[1], filters[2])
-        self.maxpool3 = nn.MaxPool3d(kernel_size=2)
-        self.conv4 = unetConv2_3d_regression(filters[2], filters[3], self.is_batchnorm, residual_path=True)
-
-        # upsampling
-        self.up_concat3 = unetUp3d_regression(filters[3], filters[2], self.is_deconv, residual_path=True)
-        self.up_concat2 = unetUp3d_regression(filters[2], filters[1], self.is_deconv, residual_path=True)
-        self.up_concat1 = unetUp3d_regression(filters[1], filters[0], self.is_deconv, residual_path=True)
-
-        # final conv (without any concat)
-        self.smartFinal = nn.Conv3d(filters[0], n_classes, 1)
-
-        self.smartTanh = nn.Tanh()
+        self.tanh = nn.Tanh()
 
     def forward(self, inputs):
         conv1 = self.conv1(inputs)
@@ -319,13 +250,13 @@ class MoreInceptionStudentRes(nn.Module):
         up3 = self.up_concat3(conv3, conv4)
         up2 = self.up_concat2(conv_2, up3)
         up1 = self.up_concat1(conv1, up2)
-        final = self.smartFinal(up1)
-        final = self.smartTanh(final)
+        final = self.final(up1)
+        final = self.tanh(final)
         # print('final', final.size())
         return final
 
 
-class MoreInceptionStudentResV2(nn.Module):
+class unet_mrf_v2(nn.Module):
     def __init__(
             self,
             feature_scale=4,
@@ -334,7 +265,7 @@ class MoreInceptionStudentResV2(nn.Module):
             in_channels=1,
             is_batchnorm=True,
     ):
-        super(MoreInceptionStudentResV2, self).__init__()
+        super(unet_mrf_v2, self).__init__()
         self.is_deconv = is_deconv
         self.in_channels = in_channels
         self.is_batchnorm = is_batchnorm
@@ -346,18 +277,9 @@ class MoreInceptionStudentResV2(nn.Module):
 
         # downsampling
         self.conv1 = unetConv2_3d_regression(self.in_channels, filters[0], self.is_batchnorm, residual_path=True)
-        # self.maxpool1 = nn.MaxPool3d(kernel_size=2)
-        # 1x1 convolutions are used to compute reductions before the expensive 3x3 convolutions
-        # self.conv_mid = nn.Conv3d(filters[0], filters[1], kernel_size=1)
-
-        self.conv_mid = StudentInception(filters[0], filters[1])
-
-        # self.maxpool2 = nn.MaxPool3d(kernel_size=2)
-        # self.conv3 = unetConv2_3d_regression(filters[1], filters[2], self.is_batchnorm, residual_path=True)
-        self.conv3 = StudentInception(filters[1], filters[2])
-        # self.maxpool3 = nn.MaxPool3d(kernel_size=2)
-        # self.conv4 = unetConv2_3d_regression(filters[2], filters[3], self.is_batchnorm, residual_path=True)
-        self.conv4 = StudentInception(filters[2], filters[3])
+        self.conv_mid = MRF(filters[0], filters[1])
+        self.conv3 = MRF(filters[1], filters[2])
+        self.conv4 = MRF(filters[2], filters[3])
 
         # upsampling
         self.up_concat3 = unetUp3d_regression(filters[3], filters[2], self.is_deconv, residual_path=True)
@@ -365,108 +287,21 @@ class MoreInceptionStudentResV2(nn.Module):
         self.up_concat1 = unetUp3d_regression(filters[1], filters[0], self.is_deconv, residual_path=True)
 
         # final conv (without any concat)
-        self.smartFinal = nn.Conv3d(filters[0], n_classes, 1)
+        self.final = nn.Conv3d(filters[0], n_classes, 1)
 
-        self.smartTanh = nn.Tanh()
+        self.tanh = nn.Tanh()
 
     def forward(self, inputs):
         conv1 = self.conv1(inputs)
-        # print('conv1', conv1.size())
-        # maxpool1 = self.maxpool1(conv1)
-        # print('maxpool1', maxpool1.size())
-
         conv_2 = self.conv_mid(conv1)
-        # print('conv2', conv_2.size())
-        # maxpool2 = self.maxpool2(conv_2)
-        # print('maxpool2', maxpool2.size())
-
         conv3 = self.conv3(conv_2)
-        # print('conv3', conv3.size())
-        # maxpool3 = self.maxpool3(conv3)
-        # print('maxpool3', maxpool3.size())
-
-        # conv4 = self.conv4(maxpool3)
         conv4 = self.conv4(conv3)
-        # print('conv4', conv4.size())
 
         up3 = self.up_concat3(conv3, conv4)
         up2 = self.up_concat2(conv_2, up3)
         up1 = self.up_concat1(conv1, up2)
-        final = self.smartFinal(up1)
-        final = self.smartTanh(final)
-        # print('final', final.size())
-        return final
-
-
-class MoreInceptionStudentResV2NoMRF(nn.Module):
-    def __init__(
-            self,
-            feature_scale=4,
-            n_classes=1,
-            is_deconv=True,
-            in_channels=1,
-            is_batchnorm=True,
-    ):
-        super(MoreInceptionStudentResV2NoMRF, self).__init__()
-        self.is_deconv = is_deconv
-        self.in_channels = in_channels
-        self.is_batchnorm = is_batchnorm
-        self.feature_scale = feature_scale
-
-        # downsampling
-        filters = [64, 128, 256, 512]  # 16, 32, 64
-        filters = [int(x / self.feature_scale) for x in filters]
-
-        # downsampling
-        self.conv1 = unetConv2_3d_regression(self.in_channels, filters[0], self.is_batchnorm, residual_path=False)
-        self.maxpool1 = nn.MaxPool3d(kernel_size=2)
-        # 1x1 convolutions are used to compute reductions before the expensive 3x3 convolutions
-        # self.conv_mid = nn.Conv3d(filters[0], filters[1], kernel_size=1)
-
-        self.conv_mid = StudentInception(filters[0], filters[1])
-
-        # self.maxpool2 = nn.MaxPool3d(kernel_size=2)
-        # self.conv3 = unetConv2_3d_regression(filters[1], filters[2], self.is_batchnorm, residual_path=True)
-        self.conv3 = StudentInception(filters[1], filters[2])
-        # self.maxpool3 = nn.MaxPool3d(kernel_size=2)
-        # self.conv4 = unetConv2_3d_regression(filters[2], filters[3], self.is_batchnorm, residual_path=True)
-        self.conv4 = StudentInception(filters[2], filters[3])
-
-        # upsampling
-        self.up_concat3 = unetUp3d_regression(filters[3], filters[2], self.is_deconv, residual_path=True)
-        self.up_concat2 = unetUp3d_regression(filters[2], filters[1], self.is_deconv, residual_path=True)
-        self.up_concat1 = unetUp3d_regression(filters[1], filters[0], self.is_deconv, residual_path=True)
-
-        # final conv (without any concat)
-        self.smartFinal = nn.Conv3d(filters[0], n_classes, 1)
-
-        self.smartTanh = nn.Tanh()
-
-    def forward(self, inputs):
-        conv1 = self.conv1(inputs)
-        # print('conv1', conv1.size())
-        # maxpool1 = self.maxpool1(conv1)
-        # print('maxpool1', maxpool1.size())
-
-        conv_2 = self.conv_mid(conv1)
-        # print('conv2', conv_2.size())
-        # maxpool2 = self.maxpool2(conv_2)
-        # print('maxpool2', maxpool2.size())
-
-        conv3 = self.conv3(conv_2)
-        # print('conv3', conv3.size())
-        # maxpool3 = self.maxpool3(conv3)
-        # print('maxpool3', maxpool3.size())
-
-        # conv4 = self.conv4(maxpool3)
-        conv4 = self.conv4(conv3)
-        # print('conv4', conv4.size())
-
-        up3 = self.up_concat3(conv3, conv4)
-        up2 = self.up_concat2(conv_2, up3)
-        up1 = self.up_concat1(conv1, up2)
-        final = self.smartFinal(up1)
-        final = self.smartTanh(final)
+        final = self.final(up1)
+        final = self.tanh(final)
         # print('final', final.size())
         return final
 
@@ -1028,12 +863,10 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = unet3dregStudentRes()
     elif netG == 'deeper_student':
         net = DeeperStudentRes()
-    elif netG == 'inception_student':
-        net = InceptionStudentRes()
-    elif netG == 'moreinception_student':
-        net = MoreInceptionStudentRes()
-    elif netG == 'moreinception_student_v2':
-        net = MoreInceptionStudentResV2()
+    elif netG == 'unet_mrf':
+        net = unet_mrf()
+    elif netG == 'unet_mrf_v2':
+        net = unet_mrf_v2()
     elif netG == 'espnet':
         net = ESPNet()
     elif netG == '3dfcn':
