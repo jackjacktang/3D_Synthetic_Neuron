@@ -7,7 +7,7 @@ scipy==1.0.0
 requests>=2.20.0
 torchvision==0.3.0
 numpy==1.17.0
-Pillow==6.2.1
+Pillow==8.3.2
 beautifulsoup4==4.8.1
 dominate==2.4.0
 skimage==0.0
